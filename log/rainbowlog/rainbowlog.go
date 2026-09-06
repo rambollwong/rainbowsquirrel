@@ -89,7 +89,9 @@ func (l *Log) After(ctx context.Context, info *rainbowsquirrel.ExecInfo) error {
 	if lv < l.cfg.level {
 		return nil
 	}
-	rec := l.logger.Level(lv).Msg("rainbowsquirrel "+info.Op.String()).
+	rec := l.logger.Level(lv).
+		WithLabels("rainbowsquirrel").
+		IgnoreCaller().
 		Str("op", info.Op.String()).
 		Dur("duration", time.Millisecond, info.Duration).
 		Any("in_tx", info.InTx)
