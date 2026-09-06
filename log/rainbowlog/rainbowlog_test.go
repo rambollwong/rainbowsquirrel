@@ -94,6 +94,28 @@ func TestAfterSlowQuery(t *testing.T) {
 	}
 }
 
+func TestAfterCompactsQueryWhitespace(t *testing.T) {
+	logger, buf := newCaptureLogger(t)
+	l := New(logger)
+	info := &rainbowsquirrel.ExecInfo{
+		Op:       rainbowsquirrel.OpGet,
+		Query:    "SELECT *\n\tFROM t\nWHERE id = :id",
+		Duration: time.Millisecond,
+		Start:    time.Now(),
+	}
+	if err := l.After(context.Background(), info); err != nil {
+		t.Fatal(err)
+	}
+	_ = logger.Flush()
+	out := buf.String()
+	if !strings.Contains(out, "SELECT * FROM t WHERE id = :id") {
+		t.Fatalf("query should be compacted to a single line: %s", out)
+	}
+	if strings.Contains(out, `\n`) || strings.Contains(out, `\t`) {
+		t.Fatalf("query should not contain newline/tab escapes: %s", out)
+	}
+}
+
 func TestAfterLevelThreshold(t *testing.T) {
 	logger, buf := newCaptureLogger(t)
 	l := New(logger, WithLevel(rlevel.Error))

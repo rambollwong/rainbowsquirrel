@@ -158,7 +158,7 @@ type RowSource interface {
 
 - 语法：`:name`（sqlx 风格）；同时支持裸 `?` 位置参数透传
 - 解析必须跳过：`::cast` 语法、单引号字符串字面量、`--` / `/* */` 注释（避免误伤 SQL 文本）
-- 方言重绑定：`Rebind(query, style)` 将 `?` 转为 `$n`/`@n`（全局 `WithPlaceholder` 配置，默认 `?` 原样）；**复用同一占位符解析器**，仅替换真正占位符位置的 `?`，同样跳过 `::`、字符串字面量与注释
+- 方言重绑定：`Rebind(query, style)` 将 `?` 转为 `$n`/`@n`（全局 `WithPlaceholder` 配置；默认 `?` 原样，但 PostgreSQL 驱动自动默认 `$n`，显式配置优先，见 §14.1 与 ADR #45）；**复用同一占位符解析器**，仅替换真正占位符位置的 `?`，同样跳过 `::`、字符串字面量与注释
 - 切片值 + `WithSliceExpansion(true)`：`:ids` 绑定 `[]int{1,2,3}` → `IN (?,?,?)` + `[1,2,3]`；**空切片报 `ErrSliceExpansion`**（`IN ()` 非法，交由使用者处理空场景）
 - 缺失 key → `ErrPlaceholderNotFound`（无论 strict 与否，静默缺失不允许）
 
@@ -460,7 +460,7 @@ func WithQuery(enabled bool) Option                 // 输出 SQL，默认 true
 func WithArgs(enabled bool) Option                  // 输出参数，默认 false（防泄漏）
 ```
 
-行为：Before 记录开始；After 记录耗时、`info.Err`（含 Bind 失败、无行、Before 中止等全部错误路径）；Query 于 Close 时输出。
+行为：Before 记录开始；After 记录耗时、`info.Err`（含 Bind 失败、无行、Before 中止等全部错误路径）；Query 于 Close 时输出；输出 SQL 前将连续空白折叠为单行（仅日志展示，执行 SQL 不改动）。
 
 另提供 `rainbowsquirrel/log/rainbowlog` 可选子包：基于 `github.com/rambollwong/rainbowlog` 结构化日志库的同语义插件（`New(logger *rlog.Logger, opts ...Option)`，Option 与 slog 版一致）。
 
@@ -489,7 +489,7 @@ func (tx *Tx) RawTx() *sql.Tx
 |---|---|---|
 | `WithTagName("db")` | `db` | tag 名 |
 | `WithNameMapper(snakeCase)` | snake_case | 字段名→列名 |
-| `WithPlaceholder(Question)` | Question | 占位符方言 |
+| `WithPlaceholder(Question)` | Question；PostgreSQL 驱动自动 Dollar | 占位符方言，显式设置优先 |
 | `WithStrictMode(false)` | false | 未知列/缺失字段报错 |
 | `WithSliceExpansion(false)` | false | IN 展开 |
 | `WithNullToZeroValue(true)` | true | NULL → 零值 |
@@ -695,6 +695,7 @@ tx.Commit()
 | 42 | 批量绑定边界 | 组外占位符从第一个对象取值；批量不支持切片 IN 展开 | 明确隐含决策 |
 | 43 | Prepared statement | v1 不做框架级 stmt 缓存；用户经 `RawDB()`/`RawTx()` + 纯函数自行组合 | 薄映射层定位；database/sql 与驱动已处理直通路径；收益被框架开销稀释 |
 | 44 | 嵌套事务 | `Tx.Begin` 用 `SAVEPOINT` 实现；子 Rollback 回滚到保存点、子 Commit 释放保存点，均不影响外层；结束后复用返回 `sql.ErrTxDone` | 兑现 §19 未来候选，SAVEPOINT 为 SQL 标准 |
+| 45 | PostgreSQL 占位符默认 | `New` 经 `db.Driver()` 反射具体驱动类型的包路径，检测到 pgx / lib/pq 驱动时默认 `placeholder=Dollar`，显式 `WithPlaceholder` 优先 | PG 不识别 `?`（`?` 被解析为 jsonb 操作符，多参数 VALUES 报 `syntax error at or near ","`），自动适配避免默认配置在 PG 上不可用 |
 
 ### 实现期待定项
 

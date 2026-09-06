@@ -210,3 +210,26 @@ func TestPostgresNoRows(t *testing.T) {
 		t.Fatalf("users = %#v, want empty non-nil", users)
 	}
 }
+
+// TestPostgresDefaultPlaceholderMultilineInsert reproduces the bug where a
+// multi-line INSERT ... RETURNING query fails under the default placeholder
+// style on PostgreSQL drivers: `?` is parsed by PostgreSQL as the jsonb
+// operator instead of a parameter, yielding "syntax error at or near ','".
+// TestPostgresDefaultPlaceholderMultilineInsert 复现默认占位符下多行 INSERT ...
+// RETURNING 在 PostgreSQL 驱动上失败的问题：`?` 被 PostgreSQL 当作 jsonb
+// 操作符而非参数，报 "syntax error at or near ','"。
+func TestPostgresDefaultPlaceholderMultilineInsert(t *testing.T) {
+	ctx := context.Background()
+	d := rainbowsquirrel.New(newPGTestDB(t)) // 默认配置，未显式设置 WithPlaceholder
+
+	const q = `INSERT INTO users (name, age)
+		VALUES (:name, :age)
+		RETURNING id`
+	id, err := d.Get[int64](ctx, q, map[string]any{"name": "multiline", "age": 18})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if id != 1 {
+		t.Fatalf("id = %d, want 1", id)
+	}
+}

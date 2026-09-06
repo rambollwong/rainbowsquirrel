@@ -12,8 +12,8 @@ import (
 type PlaceholderStyle int
 
 const (
-	// PlaceholderQuestion keeps ? as-is (default, compatible with most drivers).
-	// PlaceholderQuestion 保持 ? 原样（默认，多数驱动兼容）。
+	// PlaceholderQuestion keeps ? as-is (default for non-PostgreSQL drivers).
+	// PlaceholderQuestion 保持 ? 原样（非 PostgreSQL 驱动的默认值）。
 	PlaceholderQuestion PlaceholderStyle = iota
 	// PlaceholderDollar rewrites to $1, $2… (PostgreSQL).
 	// PlaceholderDollar 转为 $1、$2…（PostgreSQL）。
@@ -99,8 +99,11 @@ func WithNameMapper(m NameMapper) Option {
 	return func(c *config) { c.nameMapper = m }
 }
 
-// WithPlaceholder sets the placeholder dialect, default PlaceholderQuestion.
-// WithPlaceholder 设置占位符方言，默认 PlaceholderQuestion。
+// WithPlaceholder sets the placeholder dialect. The default is
+// PlaceholderQuestion, except that PostgreSQL drivers (pgx / lib/pq) are
+// auto-detected and default to PlaceholderDollar; an explicit setting wins.
+// WithPlaceholder 设置占位符方言。默认为 PlaceholderQuestion，但 PostgreSQL
+// 驱动（pgx / lib/pq）会被自动识别并默认 PlaceholderDollar；显式设置优先。
 func WithPlaceholder(p PlaceholderStyle) Option {
 	return func(c *config) { c.placeholder = p }
 }

@@ -5,6 +5,7 @@ package rainbowlog
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	rlevel "github.com/rambollwong/rainbowlog/level"
@@ -93,7 +94,7 @@ func (l *Log) After(ctx context.Context, info *rainbowsquirrel.ExecInfo) error {
 		Dur("duration", time.Millisecond, info.Duration).
 		Any("in_tx", info.InTx)
 	if l.cfg.withQuery {
-		rec.Str("query", info.Query)
+		rec.Str("query", compactQuery(info.Query))
 	}
 	if l.cfg.withArgs {
 		rec.Any("args", info.BoundArgs)
@@ -103,4 +104,12 @@ func (l *Log) After(ctx context.Context, info *rainbowsquirrel.ExecInfo) error {
 	}
 	rec.Done()
 	return nil
+}
+
+// compactQuery collapses runs of whitespace (newlines, tabs, spaces) into a
+// single space for log display only; the executed SQL is never altered.
+// compactQuery 将连续空白（换行、制表符、空格）折叠为单个空格，仅用于日志
+// 展示；执行的 SQL 不会被改动。
+func compactQuery(s string) string {
+	return strings.Join(strings.Fields(s), " ")
 }

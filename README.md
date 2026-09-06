@@ -18,7 +18,7 @@ A lightweight Go SQL mapping layer between `database/sql` and business code. It 
 - Configurable NULL semantics (zero value by default / `ErrNullNotAllowed`), time zone/layout, strict mode
 - Plugin system: `Before` (gate — an error aborts) + `After` (bypass — errors/panics do not block)
 - Cache plugin (`rainbowsquirrel/cache`): serves `Get`/`Select` only; in-memory LRU, binary codec, singleflight, namespace invalidation; `rainbowsquirrel/cache/redis` provides a Redis backend
-- Log plugin (`rainbowsquirrel/log`): slog integration, slow-query Warn; `rainbowsquirrel/log/rainbowlog` provides a rainbowlog structured-logging backend
+- Log plugin (`rainbowsquirrel/log`): slog integration, slow-query Warn, SQL compacted to a single line for display; `rainbowsquirrel/log/rainbowlog` provides a rainbowlog structured-logging backend
 - Custom converters via `RegisterConverter[T]`
 
 ## Installation
@@ -185,7 +185,7 @@ Arg dispatch (`arg any`): single struct/map → `BindNamed`; `[]struct`/`[]map` 
 | ------------------------------------- | ---------------------------- | ---------------------------------------------- |
 | `WithTagName`                         | `db`                         | struct tag name                                |
 | `WithNameMapper`                      | snake_case                   | field name → column name                       |
-| `WithPlaceholder`                     | `Question`                   | placeholder dialect                            |
+| `WithPlaceholder`                     | `Question`; PostgreSQL drivers auto `Dollar` | placeholder dialect, explicit setting wins |
 | `WithStrictMode`                      | `false`                      | unknown columns return `ErrColumnNotFound`     |
 | `WithSliceExpansion`                  | `false`                      | expand `IN (:ids)`                             |
 | `WithNullToZeroValue`                 | `true`                       | NULL → zero value                              |

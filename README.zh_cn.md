@@ -18,7 +18,7 @@
 - NULL 语义可配（默认零值 / `ErrNullNotAllowed`）、时区/布局可配、strict 模式
 - 插件系统：`Before`（门，出错中止）+ `After`（旁路，错误/panic 不阻断）
 - 缓存插件（`rainbowsquirrel/cache`）：仅服务 `Get`/`Select`，内存 LRU、二进制 codec、singleflight 防击穿、域失效；`rainbowsquirrel/cache/redis` 提供 Redis 后端
-- 日志插件（`rainbowsquirrel/log`）：slog 对接，慢查询 Warn；`rainbowsquirrel/log/rainbowlog` 提供 rainbowlog 结构化日志后端
+- 日志插件（`rainbowsquirrel/log`）：slog 对接，慢查询 Warn，SQL 折叠为单行展示；`rainbowsquirrel/log/rainbowlog` 提供 rainbowlog 结构化日志后端
 - 自定义转换器 `RegisterConverter[T]`
 
 ## 安装
@@ -185,7 +185,7 @@ rlogplugin.New(logger, opts...)             // 实现 rainbowsquirrel.Plugin
 |---|---|---|
 | `WithTagName` | `db` | struct tag 名 |
 | `WithNameMapper` | snake_case | 字段名 → 列名 |
-| `WithPlaceholder` | `Question` | 占位符方言 |
+| `WithPlaceholder` | `Question`；PostgreSQL 驱动自动 `Dollar` | 占位符方言，显式设置优先 |
 | `WithStrictMode` | `false` | 未知列报 `ErrColumnNotFound` |
 | `WithSliceExpansion` | `false` | `IN (:ids)` 展开 |
 | `WithNullToZeroValue` | `true` | NULL → 零值 |

@@ -3,7 +3,10 @@ package rainbowsquirrel
 import (
 	"context"
 	"database/sql"
+	"database/sql/driver"
 	"fmt"
+	"reflect"
+	"strings"
 	"sync/atomic"
 	"time"
 )
@@ -22,14 +25,39 @@ type DB struct {
 	cfg *config
 }
 
-// New creates a DB instance.
-// New 创建 DB 实例。
+// New creates a DB instance. PostgreSQL drivers (pgx / lib/pq) are detected
+// via the registered driver's package path, so the default placeholder becomes
+// Dollar automatically; an explicit WithPlaceholder always wins.
+// New 创建 DB 实例。经注册驱动的包路径识别 PostgreSQL 驱动（pgx / lib/pq），
+// 自动将默认占位符设为 Dollar；显式 WithPlaceholder 始终优先。
 func New(db *sql.DB, opts ...Option) *DB {
 	cfg := defaultConfig()
+	if isPostgresDriver(db.Driver()) {
+		cfg.placeholder = PlaceholderDollar
+	}
 	for _, o := range opts {
 		o(cfg)
 	}
 	return &DB{db: db, cfg: cfg}
+}
+
+// isPostgresDriver reports whether the registered driver belongs to a
+// PostgreSQL driver family (pgx / lib/pq) by inspecting the package path of
+// the concrete driver type. It is best-effort: an explicit WithPlaceholder
+// always overrides the detected default.
+// isPostgresDriver 通过具体驱动类型的包路径判断是否属于 PostgreSQL 驱动家族
+// （pgx / lib/pq）。这是尽力而为的检测：显式 WithPlaceholder 始终覆盖检测默认值。
+func isPostgresDriver(d driver.Driver) bool {
+	if d == nil {
+		return false
+	}
+	var v any = d
+	t := reflect.TypeOf(v)
+	if t.Kind() == reflect.Pointer {
+		t = t.Elem()
+	}
+	pkg := t.PkgPath()
+	return strings.Contains(pkg, "jackc/pgx") || strings.HasSuffix(pkg, "/pq")
 }
 
 // Use appends plugins; registering after first execution returns
