@@ -32,8 +32,8 @@ func benchSlowRows() [][]any {
 func BenchmarkScanStructFastPath(b *testing.B) {
 	rows := benchFastRows()
 	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for b.Loop() {
 		rs := &fakeRowSource{cols: []string{"id", "name", "age"}, rows: rows}
 		var u benchUser
 		if err := Scan(rs, &u); err != nil {
@@ -47,8 +47,8 @@ func BenchmarkScanStructFastPath(b *testing.B) {
 func BenchmarkScanStructSlowPath(b *testing.B) {
 	rows := benchSlowRows()
 	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for b.Loop() {
 		rs := &fakeRowSource{cols: []string{"id", "at"}, rows: rows}
 		var u benchSlowUser
 		if err := Scan(rs, &u); err != nil {
@@ -62,8 +62,8 @@ func BenchmarkScanStructSlowPath(b *testing.B) {
 func BenchmarkHandwrittenScan(b *testing.B) {
 	rows := benchFastRows()
 	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for b.Loop() {
 		rs := &fakeRowSource{cols: []string{"id", "name", "age"}, rows: rows}
 		if !rs.Next() {
 			b.Fatal("no row")
@@ -87,8 +87,7 @@ func BenchmarkBindNamed(b *testing.B) {
 	u := U{ID: 1, Name: "alice"}
 	q := "SELECT * FROM t WHERE id = :id AND name = :name"
 	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		if _, _, err := BindNamed(q, u); err != nil {
 			b.Fatal(err)
 		}
@@ -104,8 +103,7 @@ func BenchmarkBindNamedMany(b *testing.B) {
 	}
 	q := "INSERT INTO t (id, name) VALUES (:id, :name)"
 	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		if _, _, err := BindNamedMany(q, args); err != nil {
 			b.Fatal(err)
 		}
@@ -117,8 +115,7 @@ func BenchmarkBindNamedMany(b *testing.B) {
 func BenchmarkRebind(b *testing.B) {
 	q := "SELECT * FROM t WHERE a = ? AND b = ? AND c = ?"
 	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_ = Rebind(q, PlaceholderDollar)
 	}
 }
