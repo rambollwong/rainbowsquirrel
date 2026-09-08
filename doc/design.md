@@ -148,6 +148,7 @@ type RowSource interface {
 |---|---|
 | 单个 struct / map | `BindNamed`（单对象命名绑定） |
 | 单个 `[]struct` / `[]map` | `BindNamedMany`（批量命名绑定，语义见下） |
+| 标量单值（基础类型、`time.Time`、`[]byte`、`driver.Valuer`） | 仅当 query **恰好含一个命名占位符**时绑定到该占位符（ADR #46） |
 | `[]any` / 其他基础值 | 位置参数，`?` 原样透传 |
 
 > **`BindNamedMany` 语义**：query 中须**恰好含一个连续命名占位符组**（典型 `VALUES (:a, :b)`），该组按 `args` 数量重复 N 组（`(?,?),(?,?)...`）；组外占位符单次绑定（从第一个对象取值）；多组或无组报错。**不支持**组内切片 IN 展开（与 `WithSliceExpansion` 不组合）。
@@ -696,6 +697,7 @@ tx.Commit()
 | 43 | Prepared statement | v1 不做框架级 stmt 缓存；用户经 `RawDB()`/`RawTx()` + 纯函数自行组合 | 薄映射层定位；database/sql 与驱动已处理直通路径；收益被框架开销稀释 |
 | 44 | 嵌套事务 | `Tx.Begin` 用 `SAVEPOINT` 实现；子 Rollback 回滚到保存点、子 Commit 释放保存点，均不影响外层；结束后复用返回 `sql.ErrTxDone` | 兑现 §19 未来候选，SAVEPOINT 为 SQL 标准 |
 | 45 | PostgreSQL 占位符默认 | `New` 经 `db.Driver()` 反射具体驱动类型的包路径，检测到 pgx / lib/pq 驱动时默认 `placeholder=Dollar`，显式 `WithPlaceholder` 优先 | PG 不识别 `?`（`?` 被解析为 jsonb 操作符，多参数 VALUES 报 `syntax error at or near ","`），自动适配避免默认配置在 PG 上不可用 |
+| 46 | 单值绑定命名占位符 | query 恰好含一个命名占位符时，允许标量单值（基础类型、`time.Time`、`[]byte`、`driver.Valuer`）直接绑定；多个占位符仍要求 struct/map | 单参数查询传 map 啰嗦；唯一占位符下无歧义；多占位符无法拆分故保持报错 |
 
 ### 实现期待定项
 

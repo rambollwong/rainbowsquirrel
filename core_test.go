@@ -99,14 +99,31 @@ func TestBindErrorStillRunsAfter(t *testing.T) {
 	defer db.Close()
 	p := &eventPlugin{}
 	d := New(db, WithPlugin(p))
-	// Named placeholder + non-struct/map arg → bind error; After still runs.
-	// 命名占位符 + 非 struct/map 参数 → 绑定错误；After 仍触发。
-	_, err := d.Get[int64](context.Background(), "SELECT id FROM t WHERE id = :id", 1)
+	// Multiple named placeholders + scalar arg → bind error; After still runs.
+	// 多个命名占位符 + 标量参数 → 绑定错误；After 仍触发。
+	_, err := d.Get[int64](context.Background(), "SELECT id FROM t WHERE id = :id AND name = :name", 1)
 	if !errors.Is(err, ErrUnsupportedType) {
 		t.Fatalf("err = %v, want ErrUnsupportedType", err)
 	}
 	if len(p.events) != 1 || p.events[0] != "after:Get" {
 		t.Fatalf("events = %v, want only after:Get", p.events)
+	}
+}
+
+func TestGetSingleScalarNamedPlaceholder(t *testing.T) {
+	db, mock, _ := sqlmock.New()
+	defer db.Close()
+	mock.ExpectQuery(regexp.QuoteMeta("SELECT id FROM t WHERE id = ?")).
+		WithArgs(1).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
+	d := New(db)
+	// A single named placeholder may bind a scalar value. 唯一命名占位符允许绑定标量单值。
+	id, err := d.Get[int64](context.Background(), "SELECT id FROM t WHERE id = :id", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if id != 1 {
+		t.Fatalf("id = %d, want 1", id)
 	}
 }
 

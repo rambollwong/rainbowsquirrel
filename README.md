@@ -177,7 +177,7 @@ rlogplugin "github.com/rambollwong/rainbowsquirrel/log/rainbowlog"
 rlogplugin.New(logger, opts...)             // implements rainbowsquirrel.Plugin
 ```
 
-Arg dispatch (`arg any`): single struct/map → `BindNamed`; `[]struct`/`[]map` → `BindNamedMany`; `[]any`/basic value → positional passthrough.
+Arg dispatch (`arg any`): single struct/map → `BindNamed`; `[]struct`/`[]map` → `BindNamedMany`; with exactly one named placeholder a scalar value binds directly; `[]any`/basic value → positional passthrough.
 
 ## Configuration
 

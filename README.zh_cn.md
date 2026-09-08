@@ -177,7 +177,7 @@ rlogplugin "github.com/rambollwong/rainbowsquirrel/log/rainbowlog"
 rlogplugin.New(logger, opts...)             // 实现 rainbowsquirrel.Plugin
 ```
 
-参数分派（`arg any`）：单个 struct/map → `BindNamed`；`[]struct`/`[]map` → `BindNamedMany`；`[]any`/基础值 → 位置参数透传。
+参数分派（`arg any`）：单个 struct/map → `BindNamed`；`[]struct`/`[]map` → `BindNamedMany`；恰好一个命名占位符时标量单值直接绑定；`[]any`/基础值 → 位置参数透传。
 
 ## 配置
 

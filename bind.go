@@ -121,6 +121,21 @@ func bindNamed(query string, arg any, cfg *config) (string, []any, []any, error)
 	if err != nil {
 		return "", nil, nil, err
 	}
+	if isScalarValue(rv) {
+		if len(named) != 1 {
+			return "", nil, nil, fmt.Errorf("bindNamed: named placeholders require struct or map, got %s: %w",
+				typeName(rv), ErrUnsupportedType)
+		}
+		// Exactly one named placeholder: bind the scalar value to it.
+		// 恰好一个命名占位符：将标量单值绑定到该占位符。
+		nv, nerr := normalizeBindValue(rv.Interface(), false, locOf(cfg))
+		if nerr != nil {
+			return "", nil, nil, nerr
+		}
+		p := named[0]
+		bindSQL := query[:p.pos] + "?" + query[p.end:]
+		return bindSQL, []any{nv}, []any{nv}, nil
+	}
 	if rv.Kind() != reflect.Struct && rv.Kind() != reflect.Map {
 		return "", nil, nil, fmt.Errorf("bindNamed: named placeholders require struct or map, got %s: %w",
 			typeName(rv), ErrUnsupportedType)
@@ -413,6 +428,34 @@ func namedPlaces(places []placeholder) []placeholder {
 	return out
 }
 
+// isScalarValue reports whether a dereferenced value can bind as a single
+// scalar placeholder value (basic types, time.Time, []byte, driver.Valuer).
+// isScalarValue 判断解引用后的值是否可作为单个标量占位符值绑定（基础类型、
+// time.Time、[]byte、driver.Valuer）。
+func isScalarValue(rv reflect.Value) bool {
+	if !rv.IsValid() {
+		return false
+	}
+	if rv.Type() == timeType || rv.Type() == byteSliceType {
+		return true
+	}
+	if rv.CanInterface() {
+		if _, ok := rv.Interface().(driver.Valuer); ok {
+			return true
+		}
+	}
+	switch rv.Kind() {
+	case reflect.Bool,
+		reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64,
+		reflect.Float32, reflect.Float64,
+		reflect.String:
+		return true
+	default:
+		return false
+	}
+}
+
 // derefValue dereferences pointers; a nil pointer is treated as an invalid arg.
 // derefValue 解引用指针，nil 指针视为无效参数。
 func derefValue(rv reflect.Value) (reflect.Value, error) {
@@ -686,10 +729,9 @@ func bindForExec(query string, arg any, cfg *config) (boundSQL, bindSQL string, 
 			bindSQL, args, bindArgs, err = bindNamed(query, arg, cfg)
 		case reflect.Slice:
 			if rv.Type() == byteSliceType {
-				return "", "", nil, nil, fmt.Errorf("bind: named placeholders require struct/map/slice of struct/map: %w", ErrUnsupportedType)
-			}
-			elem := rv.Type().Elem()
-			if elem.Kind() == reflect.Struct || elem.Kind() == reflect.Map {
+				// []byte is a single scalar value. []byte 为单个标量值。
+				bindSQL, args, bindArgs, err = bindNamed(query, arg, cfg)
+			} else if elem := rv.Type().Elem(); elem.Kind() == reflect.Struct || elem.Kind() == reflect.Map {
 				sliceArgs := make([]any, rv.Len())
 				for i := 0; i < rv.Len(); i++ {
 					sliceArgs[i] = rv.Index(i).Interface()
@@ -700,7 +742,9 @@ func bindForExec(query string, arg any, cfg *config) (boundSQL, bindSQL string, 
 				return "", "", nil, nil, fmt.Errorf("bind: named placeholders require struct/map/slice of struct/map: %w", ErrUnsupportedType)
 			}
 		default:
-			return "", "", nil, nil, fmt.Errorf("bind: named placeholders require struct or map, got %s: %w", typeName(rv), ErrUnsupportedType)
+			// Scalar value: bindNamed allows it only when exactly one named
+			// placeholder exists. 标量单值：bindNamed 仅在恰好一个命名占位符时允许。
+			bindSQL, args, bindArgs, err = bindNamed(query, arg, cfg)
 		}
 		if err != nil {
 			return "", "", nil, nil, err

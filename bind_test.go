@@ -251,3 +251,50 @@ func TestBindNamedTimeLocationJSON(t *testing.T) {
 		t.Fatalf("json time = %v, want %q", m["at"], want)
 	}
 }
+
+func TestBindNamedSingleScalar(t *testing.T) {
+	q, args, err := BindNamed("SELECT * FROM t WHERE id = :id", 7)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if q != "SELECT * FROM t WHERE id = ?" {
+		t.Fatalf("query = %q", q)
+	}
+	if !reflect.DeepEqual(args, []any{7}) {
+		t.Fatalf("args = %#v", args)
+	}
+}
+
+func TestBindNamedSingleString(t *testing.T) {
+	q, args, err := BindNamed("SELECT * FROM links WHERE short_code = :short_code", "abc")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if q != "SELECT * FROM links WHERE short_code = ?" {
+		t.Fatalf("query = %q", q)
+	}
+	if !reflect.DeepEqual(args, []any{"abc"}) {
+		t.Fatalf("args = %#v", args)
+	}
+}
+
+func TestBindNamedSingleTime(t *testing.T) {
+	at := time.Date(2024, 1, 2, 3, 4, 5, 0, time.UTC)
+	q, args, err := BindNamed("SELECT * FROM t WHERE created_at = :created_at", at)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if q != "SELECT * FROM t WHERE created_at = ?" {
+		t.Fatalf("query = %q", q)
+	}
+	if !reflect.DeepEqual(args, []any{at}) {
+		t.Fatalf("args = %#v", args)
+	}
+}
+
+func TestBindNamedMultiPlaceholderScalarErrors(t *testing.T) {
+	_, _, err := BindNamed("SELECT * FROM t WHERE a = :a AND b = :b", 1)
+	if !errors.Is(err, ErrUnsupportedType) {
+		t.Fatalf("err = %v, want ErrUnsupportedType", err)
+	}
+}
