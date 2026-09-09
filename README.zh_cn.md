@@ -17,7 +17,7 @@
 - `db` tag：`db:"col"`、`db:"-"`、`db:"col,json"`、`db:"col,omitempty"`（空值绑定为 NULL）
 - NULL 语义可配（默认零值 / `ErrNullNotAllowed`）、时区/布局可配、strict 模式
 - 插件系统：`Before`（门，出错中止）+ `After`（旁路，错误/panic 不阻断）
-- 缓存插件（`rainbowsquirrel/cache`）：仅服务 `Get`/`Select`，内存 LRU、二进制 codec、singleflight 防击穿、域失效；`rainbowsquirrel/cache/redis` 提供 Redis 后端
+- 缓存插件（`rainbowsquirrel/cache`）：默认关闭，调用级 `WithCache`/`WithTTL`/`WithNamespace` 显式启用；仅服务 `Get`/`Select`，内存 LRU、二进制 codec、singleflight 防击穿、域失效；`rainbowsquirrel/cache/redis` 提供 Redis 后端
 - 日志插件（`rainbowsquirrel/log`）：slog 对接，慢查询 Warn，SQL 折叠为单行展示；`rainbowsquirrel/log/rainbowlog` 提供 rainbowlog 结构化日志后端
 - 自定义转换器 `RegisterConverter[T]`
 
@@ -133,6 +133,8 @@ client := goredis.NewClient(&goredis.Options{Addr: "localhost:6379"})
 store := rediscache.NewStore(client, rediscache.WithKeyPrefix("rs:"))
 c := cache.New(store, cache.WithDefaultTTL(5*time.Minute))
 db := rainbowsquirrel.New(rawDB, rainbowsquirrel.WithPlugin(c))
+// 缓存默认关闭：查询时需用 cache.WithCache() / WithTTL() / WithNamespace() 开启；
+// WithDefaultTTL 只是开启后的默认 TTL，单独配置不会开启缓存。
 ```
 
 建议配置 `WithKeyPrefix`：`Flush` 只删除该前缀下的 key；未配置时 `Flush` 执行 `FLUSHDB`（清空整个 DB，缓存请使用专用 DB）。
@@ -165,7 +167,7 @@ rainbowsquirrel.PlaceholderQuestion / PlaceholderDollar / PlaceholderAt
 // cache 插件
 cache.New(store, opts...)                   // 实现 rainbowsquirrel.Plugin
 cache.NewMemoryStore(capacity, defaultTTL)
-cache.WithTTL(d) / WithNamespace(ns) / WithNoCache() / WithInvalidateNamespace(ns)
+cache.WithCache() / WithTTL(d) / WithNamespace(ns) / WithNoCache() / WithInvalidateNamespace(ns)
 c.InvalidateQuery(ctx, ns, query, arg) / Invalidate(ctx, key) / InvalidateNamespace(ctx, ns) / Flush(ctx)
 
 // log 插件

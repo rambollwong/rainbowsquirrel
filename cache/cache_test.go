@@ -278,3 +278,97 @@ func TestCachePluginSingleflight(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestCachePluginDefaultDisabled(t *testing.T) {
+	db, mock, _ := sqlmock.New()
+	defer db.Close()
+	// Two expectations: caching is off by default, so both calls hit the DB.
+	// 两个期望：默认不开启缓存，两次调用都真实查询。
+	for i := 0; i < 2; i++ {
+		mock.ExpectQuery(regexp.QuoteMeta("SELECT ?")).
+			WithArgs(1).
+			WillReturnRows(sqlmock.NewRows([]string{"x"}).AddRow(1))
+	}
+
+	c := New(NewMemoryStore(0, 0))
+	d := rainbowsquirrel.New(db, rainbowsquirrel.WithPlugin(c))
+	ctx := context.Background()
+	for i := 0; i < 2; i++ {
+		if _, err := d.Get[int64](ctx, "SELECT ?", []any{1}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestCachePluginWithCacheEnablesWithoutTTL(t *testing.T) {
+	db, mock, _ := sqlmock.New()
+	defer db.Close()
+	// Single expectation: WithCache() alone enables caching; the second call
+	// must hit the cache even without an explicit TTL.
+	// 单个期望：WithCache() 单独即开启缓存；第二次调用必须命中缓存（即使未显式 TTL）。
+	mock.ExpectQuery(regexp.QuoteMeta("SELECT ?")).
+		WithArgs(1).
+		WillReturnRows(sqlmock.NewRows([]string{"x"}).AddRow(1))
+
+	c := New(NewMemoryStore(0, 0))
+	d := rainbowsquirrel.New(db, rainbowsquirrel.WithPlugin(c))
+	ctx := context.Background()
+	for i := 0; i < 2; i++ {
+		if _, err := d.Get[int64](ctx, "SELECT ?", []any{1}, WithCache()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestCachePluginWithNamespaceEnablesWithoutTTL(t *testing.T) {
+	db, mock, _ := sqlmock.New()
+	defer db.Close()
+	// Single expectation: WithNamespace() alone enables caching.
+	// 单个期望：WithNamespace() 单独即开启缓存。
+	mock.ExpectQuery(regexp.QuoteMeta("SELECT ?")).
+		WithArgs(1).
+		WillReturnRows(sqlmock.NewRows([]string{"x"}).AddRow(1))
+
+	c := New(NewMemoryStore(0, 0))
+	d := rainbowsquirrel.New(db, rainbowsquirrel.WithPlugin(c))
+	ctx := context.Background()
+	for i := 0; i < 2; i++ {
+		if _, err := d.Get[int64](ctx, "SELECT ?", []any{1}, WithNamespace("users")); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestCachePluginDefaultTTLStillRequiresEnableSwitch(t *testing.T) {
+	db, mock, _ := sqlmock.New()
+	defer db.Close()
+	// Two expectations: WithDefaultTTL alone does not enable caching; the call
+	// still needs WithCache/WithTTL/WithNamespace.
+	// 两个期望：仅 WithDefaultTTL 不开启缓存，仍需调用级开关。
+	for i := 0; i < 2; i++ {
+		mock.ExpectQuery(regexp.QuoteMeta("SELECT ?")).
+			WithArgs(1).
+			WillReturnRows(sqlmock.NewRows([]string{"x"}).AddRow(1))
+	}
+
+	c := New(NewMemoryStore(0, 0), WithDefaultTTL(time.Minute))
+	d := rainbowsquirrel.New(db, rainbowsquirrel.WithPlugin(c))
+	ctx := context.Background()
+	for i := 0; i < 2; i++ {
+		if _, err := d.Get[int64](ctx, "SELECT ?", []any{1}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}

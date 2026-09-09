@@ -17,7 +17,7 @@ A lightweight Go SQL mapping layer between `database/sql` and business code. It 
 - `db` tags: `db:"col"`, `db:"-"`, `db:"col,json"`, `db:"col,omitempty"` (zero values bind as NULL)
 - Configurable NULL semantics (zero value by default / `ErrNullNotAllowed`), time zone/layout, strict mode
 - Plugin system: `Before` (gate — an error aborts) + `After` (bypass — errors/panics do not block)
-- Cache plugin (`rainbowsquirrel/cache`): serves `Get`/`Select` only; in-memory LRU, binary codec, singleflight, namespace invalidation; `rainbowsquirrel/cache/redis` provides a Redis backend
+- Cache plugin (`rainbowsquirrel/cache`): disabled by default, enabled per call via `WithCache`/`WithTTL`/`WithNamespace`; serves `Get`/`Select` only; in-memory LRU, binary codec, singleflight, namespace invalidation; `rainbowsquirrel/cache/redis` provides a Redis backend
 - Log plugin (`rainbowsquirrel/log`): slog integration, slow-query Warn, SQL compacted to a single line for display; `rainbowsquirrel/log/rainbowlog` provides a rainbowlog structured-logging backend
 - Custom converters via `RegisterConverter[T]`
 
@@ -133,6 +133,9 @@ client := goredis.NewClient(&goredis.Options{Addr: "localhost:6379"})
 store := rediscache.NewStore(client, rediscache.WithKeyPrefix("rs:"))
 c := cache.New(store, cache.WithDefaultTTL(5*time.Minute))
 db := rainbowsquirrel.New(rawDB, rainbowsquirrel.WithPlugin(c))
+// Caching is off by default: enable it per call with cache.WithCache() /
+// WithTTL() / WithNamespace(). WithDefaultTTL is only the default TTL once
+// enabled; it does not enable caching on its own.
 ```
 
 Configure `WithKeyPrefix` when possible: `Flush` then only deletes keys under that prefix; without a prefix `Flush` runs `FLUSHDB` (clears the whole DB — use a dedicated DB for caching).
@@ -165,7 +168,7 @@ rainbowsquirrel.PlaceholderQuestion / PlaceholderDollar / PlaceholderAt
 // cache plugin
 cache.New(store, opts...)                   // implements rainbowsquirrel.Plugin
 cache.NewMemoryStore(capacity, defaultTTL)
-cache.WithTTL(d) / WithNamespace(ns) / WithNoCache() / WithInvalidateNamespace(ns)
+cache.WithCache() / WithTTL(d) / WithNamespace(ns) / WithNoCache() / WithInvalidateNamespace(ns)
 c.InvalidateQuery(ctx, ns, query, arg) / Invalidate(ctx, key) / InvalidateNamespace(ctx, ns) / Flush(ctx)
 
 // log plugin

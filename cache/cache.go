@@ -30,9 +30,10 @@ type cacheConfig struct {
 // Option 为 cache 插件配置项。
 type Option func(*cacheConfig)
 
-// WithDefaultTTL sets the default TTL; caching is disabled when both
-// defaultTTL and call-level WithTTL are 0. WithDefaultTTL 设置默认 TTL；
-// 未启用时（defaultTTL 与调用级 WithTTL 均为 0）缓存关闭。
+// WithDefaultTTL sets the default TTL used when a call enables caching without
+// a call-level WithTTL. It does not enable caching by itself.
+// WithDefaultTTL 设置默认 TTL，在调用开启缓存但未提供调用级 WithTTL 时使用；
+// 单独配置不开启缓存。
 func WithDefaultTTL(d time.Duration) Option {
 	return func(c *cacheConfig) { c.defaultTTL = d }
 }
@@ -80,19 +81,27 @@ func (c *Cache) Name() string { return "cache" }
 
 type ttlKey struct{}
 type namespaceKey struct{}
+type cacheKey struct{}
 type noCacheKey struct{}
 type invalidateNSKey struct{}
 
-// WithTTL sets the cache TTL for this call (also acts as the enable switch).
-// WithTTL 为本次调用设置缓存 TTL（同时作为启用开关）。
+// WithTTL sets the cache TTL for this call (At the same time,
+// as a cache enable switch, it is equivalent to calling WithCache() at the same time.).
+// WithTTL 为本次调用设置缓存 TTL（同时作为启用缓存开关，相当于同时调用了WithCache()）。
 func WithTTL(d time.Duration) rainbowsquirrel.CallOption {
 	return rainbowsquirrel.NewCallOption(ttlKey{}, d)
 }
 
 // WithNamespace sets the cache namespace for this call.
-// WithNamespace 设置本次调用的缓存域。
+// WithNamespace 设置本次调用的缓存域（同时作为启用缓存开关，相当于同时调用了WithCache()）。
 func WithNamespace(ns string) rainbowsquirrel.CallOption {
 	return rainbowsquirrel.NewCallOption(namespaceKey{}, ns)
+}
+
+// WithCache enables caching for this call (cache hit).
+// WithCache 本次调用使用缓存（命中、写入）。
+func WithCache() rainbowsquirrel.CallOption {
+	return rainbowsquirrel.NewCallOption(cacheKey{}, true)
 }
 
 // WithNoCache skips the cache for this call (no hit, no write).
@@ -115,7 +124,7 @@ type callOpts struct {
 }
 
 func cacheOpts(info *rainbowsquirrel.ExecInfo) callOpts {
-	var o callOpts
+	o := callOpts{noCache: true}
 	for _, opt := range info.Options {
 		k, v := rainbowsquirrel.CallOptionKeyValue(opt)
 		switch k.(type) {
@@ -123,10 +132,14 @@ func cacheOpts(info *rainbowsquirrel.ExecInfo) callOpts {
 			if d, ok := v.(time.Duration); ok {
 				o.ttl = d
 			}
+			o.noCache = false
 		case namespaceKey:
 			if s, ok := v.(string); ok {
 				o.namespace = s
 			}
+			o.noCache = false
+		case cacheKey:
+			o.noCache = false
 		case noCacheKey:
 			o.noCache = true
 		case invalidateNSKey:
@@ -201,9 +214,9 @@ func (c *Cache) Before(ctx context.Context, info *rainbowsquirrel.ExecInfo) (con
 	if ttl <= 0 {
 		ttl = c.cfg.defaultTTL
 	}
-	if ttl <= 0 {
-		return ctx, nil // Not enabled. 未启用。
-	}
+	// ttl may be 0: the store decides the expiration semantics (e.g. no
+	// expiration for MemoryStore/Redis). ttl 可为 0：由 store 决定过期语义
+	// （MemoryStore/Redis 表示不过期）。
 	key := computeKey(o.namespace, info.BindSQL, info.BindArgs)
 
 	if c.cfg.singleflight {

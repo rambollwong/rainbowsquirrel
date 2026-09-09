@@ -330,7 +330,7 @@ type ExecInfo struct {
 ### 11.1 生效范围与启用
 
 - **仅服务 `Get`/`Select`**（完全消费型读）；`Query` 返回实时 rows，不缓存
-- **默认关闭**，显式 `WithTTL` 启用
+- **默认关闭**，调用级显式 `WithCache` / `WithTTL` / `WithNamespace` 任意一个启用；TTL 优先取调用级 `WithTTL`，缺省取插件级 `WithDefaultTTL`，仍缺省则 ttl=0 交给 store（`MemoryStore`/Redis 表示不过期）
 - 事务内**自动跳过**（不命中、不写入）——事务读须反映未提交写入，缓存会破坏隔离性
 
 ### 11.2 命中/未命中流程
@@ -437,9 +437,10 @@ func (c *Cache) Flush(ctx context.Context) error
 func CacheKey(namespace, query string, arg any) (string, error)
 
 // CallOption（rainbowsquirrel.CallOption）
-func WithTTL(d time.Duration) rainbowsquirrel.CallOption
-func WithNamespace(ns string) rainbowsquirrel.CallOption
-func WithNoCache() rainbowsquirrel.CallOption
+func WithCache() rainbowsquirrel.CallOption                     // 启用缓存（命中、写入）
+func WithTTL(d time.Duration) rainbowsquirrel.CallOption        // 设置本次 TTL，同时启用缓存
+func WithNamespace(ns string) rainbowsquirrel.CallOption        // 设置缓存域，同时启用缓存
+func WithNoCache() rainbowsquirrel.CallOption                   // 本次跳过缓存（不命中、不写入）
 func WithInvalidateNamespace(ns string) rainbowsquirrel.CallOption
 
 type Codec interface {
@@ -698,6 +699,7 @@ tx.Commit()
 | 44 | 嵌套事务 | `Tx.Begin` 用 `SAVEPOINT` 实现；子 Rollback 回滚到保存点、子 Commit 释放保存点，均不影响外层；结束后复用返回 `sql.ErrTxDone` | 兑现 §19 未来候选，SAVEPOINT 为 SQL 标准 |
 | 45 | PostgreSQL 占位符默认 | `New` 经 `db.Driver()` 反射具体驱动类型的包路径，检测到 pgx / lib/pq 驱动时默认 `placeholder=Dollar`，显式 `WithPlaceholder` 优先 | PG 不识别 `?`（`?` 被解析为 jsonb 操作符，多参数 VALUES 报 `syntax error at or near ","`），自动适配避免默认配置在 PG 上不可用 |
 | 46 | 单值绑定命名占位符 | query 恰好含一个命名占位符时，允许标量单值（基础类型、`time.Time`、`[]byte`、`driver.Valuer`）直接绑定；多个占位符仍要求 struct/map | 单参数查询传 map 啰嗦；唯一占位符下无歧义；多占位符无法拆分故保持报错 |
+| 47 | 缓存启用开关 | 缓存默认关闭；调用级 `WithCache`/`WithTTL`/`WithNamespace` 任意一个显式启用；TTL 优先取调用级 `WithTTL`，缺省取 `WithDefaultTTL`，仍缺省 ttl=0 由 store 决定（`MemoryStore`/Redis 表示不过期） | 默认安全；启用开关与 TTL 解耦，避免未显式开启时误缓存 |
 
 ### 实现期待定项
 
