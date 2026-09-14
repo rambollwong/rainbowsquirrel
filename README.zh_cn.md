@@ -13,7 +13,7 @@
 - 命名占位符 `:name` → `?` / `$n` / `@n`（`Rebind` 方言重绑定，跳过 `::cast`、字符串与注释）
 - 泛型 `Get[T]` / `Select[T]`：struct（含内嵌展平）、map、标量、指针类型参数
 - `BindNamedMany` 单组 VALUES 批量绑定
-- `IN` 展开（`WithSliceExpansion`，空切片报 `ErrSliceExpansion`）
+- `IN` 展开（`WithSliceExpansion`，支持直接传 `[]string`/`[]int` 等 slice，空切片报 `ErrSliceExpansion`）
 - `db` tag：`db:"col"`、`db:"-"`、`db:"col,json"`、`db:"col,omitempty"`（空值绑定为 NULL）
 - NULL 语义可配（默认零值 / `ErrNullNotAllowed`）、时区/布局可配、strict 模式
 - 插件系统：`Before`（门，出错中止）+ `After`（旁路，错误/panic 不阻断）
@@ -179,7 +179,7 @@ rlogplugin "github.com/rambollwong/rainbowsquirrel/log/rainbowlog"
 rlogplugin.New(logger, opts...)             // 实现 rainbowsquirrel.Plugin
 ```
 
-参数分派（`arg any`）：单个 struct/map → `BindNamed`；`[]struct`/`[]map` → `BindNamedMany`；恰好一个命名占位符时标量单值直接绑定；`[]any`/基础值 → 位置参数透传。
+参数分派（`arg any`）：单个 struct/map → `BindNamed`；`[]struct`/`[]map` → `BindNamedMany`；恰好一个命名占位符时标量单值直接绑定，或（开启 `WithSliceExpansion` 时）基础元素 slice 直接展开为 IN 列表；`[]any`/基础值 → 位置参数透传。
 
 ## 配置
 

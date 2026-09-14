@@ -136,6 +136,28 @@ func bindNamed(query string, arg any, cfg *config) (string, []any, []any, error)
 		bindSQL := query[:p.pos] + "?" + query[p.end:]
 		return bindSQL, []any{nv}, []any{nv}, nil
 	}
+	if isDirectExpandSlice(rv) && cfg != nil && cfg.sliceExpansion {
+		if len(named) != 1 {
+			return "", nil, nil, fmt.Errorf("bindNamed: named placeholders require struct or map, got %s: %w",
+				typeName(rv), ErrUnsupportedType)
+		}
+		// Exactly one named placeholder: expands the slice into its IN list.
+		// 恰好一个命名占位符：将 slice 展开为该占位符的 IN 列表。
+		items, xerr := expandSlice(rv.Interface(), named[0].name, locOf(cfg))
+		if xerr != nil {
+			return "", nil, nil, xerr
+		}
+		var b strings.Builder
+		for i := range items {
+			if i > 0 {
+				b.WriteByte(',')
+			}
+			b.WriteByte('?')
+		}
+		p := named[0]
+		bindSQL := query[:p.pos] + b.String() + query[p.end:]
+		return bindSQL, items, []any{rv.Interface()}, nil
+	}
 	if rv.Kind() != reflect.Struct && rv.Kind() != reflect.Map {
 		return "", nil, nil, fmt.Errorf("bindNamed: named placeholders require struct or map, got %s: %w",
 			typeName(rv), ErrUnsupportedType)
@@ -456,6 +478,21 @@ func isScalarValue(rv reflect.Value) bool {
 	}
 }
 
+// isDirectExpandSlice reports whether a dereferenced value is a slice that can
+// expand directly into a single named placeholder: it must have a non-struct,
+// non-map element type, so `[]struct`/`[]map` keep their BindNamedMany
+// semantics and `[]byte` stays a scalar value.
+// isDirectExpandSlice 判断解引用后的值是否可直接展开到唯一命名占位符：元素类型
+// 须非 struct/map，从而 `[]struct`/`[]map` 保持 BindNamedMany 语义、`[]byte`
+// 保持标量语义。
+func isDirectExpandSlice(rv reflect.Value) bool {
+	if !rv.IsValid() || rv.Kind() != reflect.Slice || rv.Type() == byteSliceType {
+		return false
+	}
+	elem := rv.Type().Elem()
+	return elem.Kind() != reflect.Struct && elem.Kind() != reflect.Map
+}
+
 // derefValue dereferences pointers; a nil pointer is treated as an invalid arg.
 // derefValue 解引用指针，nil 指针视为无效参数。
 func derefValue(rv reflect.Value) (reflect.Value, error) {
@@ -738,6 +775,10 @@ func bindForExec(query string, arg any, cfg *config) (boundSQL, bindSQL string, 
 				}
 				bindSQL, args, err = bindNamedMany(query, sliceArgs, cfg)
 				bindArgs = args
+			} else if cfg.sliceExpansion {
+				// Base-element slice: expand into the single named placeholder.
+				// 基础元素 slice：直接展开到唯一命名占位符。
+				bindSQL, args, bindArgs, err = bindNamed(query, arg, cfg)
 			} else {
 				return "", "", nil, nil, fmt.Errorf("bind: named placeholders require struct/map/slice of struct/map: %w", ErrUnsupportedType)
 			}

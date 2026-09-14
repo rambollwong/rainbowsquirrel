@@ -151,6 +151,49 @@ func TestBindNamedSliceExpansionEmpty(t *testing.T) {
 	}
 }
 
+func TestBindNamedSliceExpansionDirectSlice(t *testing.T) {
+	cfg := defaultConfig()
+	cfg.sliceExpansion = true
+	q, args, bindArgs, err := bindNamed("DELETE FROM t WHERE code IN (:codes)", []string{"a", "b", "c"}, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if q != "DELETE FROM t WHERE code IN (?,?,?)" {
+		t.Fatalf("query = %q", q)
+	}
+	if !reflect.DeepEqual(args, []any{"a", "b", "c"}) {
+		t.Fatalf("args = %#v", args)
+	}
+	if !reflect.DeepEqual(bindArgs, []any{[]string{"a", "b", "c"}}) {
+		t.Fatalf("bindArgs = %#v", bindArgs)
+	}
+}
+
+func TestBindNamedSliceExpansionDirectSliceEmpty(t *testing.T) {
+	cfg := defaultConfig()
+	cfg.sliceExpansion = true
+	_, _, _, err := bindNamed("DELETE FROM t WHERE code IN (:codes)", []string{}, cfg)
+	if !errors.Is(err, ErrSliceExpansion) {
+		t.Fatalf("err = %v, want ErrSliceExpansion", err)
+	}
+}
+
+func TestBindNamedDirectSliceWithoutExpansionErrors(t *testing.T) {
+	_, _, _, err := bindNamed("DELETE FROM t WHERE code IN (:codes)", []string{"a"}, defaultConfig())
+	if !errors.Is(err, ErrUnsupportedType) {
+		t.Fatalf("err = %v, want ErrUnsupportedType", err)
+	}
+}
+
+func TestBindNamedMultiPlaceholderDirectSliceErrors(t *testing.T) {
+	cfg := defaultConfig()
+	cfg.sliceExpansion = true
+	_, _, _, err := bindNamed("SELECT 1 WHERE a IN (:a) AND b IN (:b)", []string{"x"}, cfg)
+	if !errors.Is(err, ErrUnsupportedType) {
+		t.Fatalf("err = %v, want ErrUnsupportedType", err)
+	}
+}
+
 func TestBindNamedJSONTag(t *testing.T) {
 	type Doc struct {
 		Meta map[string]any `db:"meta,json"`

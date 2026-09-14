@@ -151,6 +151,33 @@ func TestIntegrationSliceExpansion(t *testing.T) {
 	}
 }
 
+func TestIntegrationSliceExpansionDirectSlice(t *testing.T) {
+	ctx := context.Background()
+	d := rainbowsquirrel.New(newTestDB(t), rainbowsquirrel.WithSliceExpansion(true))
+
+	for _, n := range []string{"a", "b", "c"} {
+		if _, err := d.Exec(ctx, `INSERT INTO users (name) VALUES (:name)`, map[string]any{"name": n}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Select with a slice passed directly as the arg. 直接传 slice 作为查询参数。
+	users, err := d.Select[itUser](ctx, `SELECT id, name FROM users WHERE name IN (:names) ORDER BY id`, []string{"a", "c"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(users) != 2 || users[0].Name != "a" || users[1].Name != "c" {
+		t.Fatalf("users = %#v", users)
+	}
+	// Batch delete with a slice. 按 slice 批量删除。
+	res, err := d.Exec(ctx, `DELETE FROM users WHERE name IN (:names)`, []string{"a", "c"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n, _ := res.RowsAffected(); n != 2 {
+		t.Fatalf("rowsAffected = %d, want 2", n)
+	}
+}
+
 func TestIntegrationPointerTarget(t *testing.T) {
 	ctx := context.Background()
 	d := rainbowsquirrel.New(newTestDB(t))

@@ -149,6 +149,7 @@ type RowSource interface {
 | 单个 struct / map | `BindNamed`（单对象命名绑定） |
 | 单个 `[]struct` / `[]map` | `BindNamedMany`（批量命名绑定，语义见下） |
 | 标量单值（基础类型、`time.Time`、`[]byte`、`driver.Valuer`） | 仅当 query **恰好含一个命名占位符**时绑定到该占位符（ADR #46） |
+| 基础元素 slice（`[]string`/`[]int` 等）+ `WithSliceExpansion(true)` | 仅当 query **恰好含一个命名占位符**时展开为该占位符的 IN 列表（ADR #48） |
 | `[]any` / 其他基础值 | 位置参数，`?` 原样透传 |
 
 > **`BindNamedMany` 语义**：query 中须**恰好含一个连续命名占位符组**（典型 `VALUES (:a, :b)`），该组按 `args` 数量重复 N 组（`(?,?),(?,?)...`）；组外占位符单次绑定（从第一个对象取值）；多组或无组报错。**不支持**组内切片 IN 展开（与 `WithSliceExpansion` 不组合）。
@@ -160,7 +161,7 @@ type RowSource interface {
 - 语法：`:name`（sqlx 风格）；同时支持裸 `?` 位置参数透传
 - 解析必须跳过：`::cast` 语法、单引号字符串字面量、`--` / `/* */` 注释（避免误伤 SQL 文本）
 - 方言重绑定：`Rebind(query, style)` 将 `?` 转为 `$n`/`@n`（全局 `WithPlaceholder` 配置；默认 `?` 原样，但 PostgreSQL 驱动自动默认 `$n`，显式配置优先，见 §14.1 与 ADR #45）；**复用同一占位符解析器**，仅替换真正占位符位置的 `?`，同样跳过 `::`、字符串字面量与注释
-- 切片值 + `WithSliceExpansion(true)`：`:ids` 绑定 `[]int{1,2,3}` → `IN (?,?,?)` + `[1,2,3]`；**空切片报 `ErrSliceExpansion`**（`IN ()` 非法，交由使用者处理空场景）
+- 切片值 + `WithSliceExpansion(true)`：`:ids` 绑定 `[]int{1,2,3}` → `IN (?,?,?)` + `[1,2,3]`；**空切片报 `ErrSliceExpansion`**（`IN ()` 非法，交由使用者处理空场景）。两种写法：slice 放在 struct/map 字段中，或 query 恰含一个命名占位符时**直接传**基础元素 slice（`[]string`/`[]int` 等）；`[]struct`/`[]map` 保持 `BindNamedMany` 批量语义，`[]byte` 保持标量语义
 - 缺失 key → `ErrPlaceholderNotFound`（无论 strict 与否，静默缺失不允许）
 
 ### 5.3 取值优先级（struct）
@@ -700,6 +701,7 @@ tx.Commit()
 | 45 | PostgreSQL 占位符默认 | `New` 经 `db.Driver()` 反射具体驱动类型的包路径，检测到 pgx / lib/pq 驱动时默认 `placeholder=Dollar`，显式 `WithPlaceholder` 优先 | PG 不识别 `?`（`?` 被解析为 jsonb 操作符，多参数 VALUES 报 `syntax error at or near ","`），自动适配避免默认配置在 PG 上不可用 |
 | 46 | 单值绑定命名占位符 | query 恰好含一个命名占位符时，允许标量单值（基础类型、`time.Time`、`[]byte`、`driver.Valuer`）直接绑定；多个占位符仍要求 struct/map | 单参数查询传 map 啰嗦；唯一占位符下无歧义；多占位符无法拆分故保持报错 |
 | 47 | 缓存启用开关 | 缓存默认关闭；调用级 `WithCache`/`WithTTL`/`WithNamespace` 任意一个显式启用；TTL 优先取调用级 `WithTTL`，缺省取 `WithDefaultTTL`，仍缺省 ttl=0 由 store 决定（`MemoryStore`/Redis 表示不过期） | 默认安全；启用开关与 TTL 解耦，避免未显式开启时误缓存 |
+| 48 | slice 直接展开 | `WithSliceExpansion(true)` 且 query 恰含一个命名占位符时，允许直接传基础元素 slice（`[]string`/`[]int` 等）展开为 IN 列表；`[]struct`/`[]map` 保持 `BindNamedMany`，`[]byte` 保持标量 | 批量删除/IN 查询直接传 `[]string` 时无需再包 map；与 ADR #46 单值绑定对称 |
 
 ### 实现期待定项
 

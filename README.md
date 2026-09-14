@@ -13,7 +13,7 @@ A lightweight Go SQL mapping layer between `database/sql` and business code. It 
 - Named placeholders `:name` → `?` / `$n` / `@n` (`Rebind` dialect rewriting, skipping `::cast`, strings, and comments)
 - Generic `Get[T]` / `Select[T]`: structs (with embedded flattening), maps, scalars, and pointer type parameters
 - `BindNamedMany` batch binding with single-group VALUES repetition
-- `IN` expansion (`WithSliceExpansion`; empty slices return `ErrSliceExpansion`)
+- `IN` expansion (`WithSliceExpansion`; `[]string`/`[]int` slices may be passed directly; empty slices return `ErrSliceExpansion`)
 - `db` tags: `db:"col"`, `db:"-"`, `db:"col,json"`, `db:"col,omitempty"` (zero values bind as NULL)
 - Configurable NULL semantics (zero value by default / `ErrNullNotAllowed`), time zone/layout, strict mode
 - Plugin system: `Before` (gate — an error aborts) + `After` (bypass — errors/panics do not block)
@@ -180,7 +180,7 @@ rlogplugin "github.com/rambollwong/rainbowsquirrel/log/rainbowlog"
 rlogplugin.New(logger, opts...)             // implements rainbowsquirrel.Plugin
 ```
 
-Arg dispatch (`arg any`): single struct/map → `BindNamed`; `[]struct`/`[]map` → `BindNamedMany`; with exactly one named placeholder a scalar value binds directly; `[]any`/basic value → positional passthrough.
+Arg dispatch (`arg any`): single struct/map → `BindNamed`; `[]struct`/`[]map` → `BindNamedMany`; with exactly one named placeholder a scalar value binds directly, or (with `WithSliceExpansion`) a base-element slice expands into its IN list; `[]any`/basic value → positional passthrough.
 
 ## Configuration
 

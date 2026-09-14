@@ -127,6 +127,37 @@ func TestGetSingleScalarNamedPlaceholder(t *testing.T) {
 	}
 }
 
+func TestExecDirectSliceExpansion(t *testing.T) {
+	db, mock, _ := sqlmock.New()
+	defer db.Close()
+	mock.ExpectExec(regexp.QuoteMeta("DELETE FROM t WHERE code IN (?,?,?)")).
+		WithArgs("a", "b", "c").
+		WillReturnResult(sqlmock.NewResult(0, 3))
+	d := New(db, WithSliceExpansion(true))
+	// A slice arg expands directly into the single named placeholder.
+	// slice 参数直接展开到唯一命名占位符。
+	res, err := d.Exec(context.Background(), "DELETE FROM t WHERE code IN (:codes)", []string{"a", "b", "c"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n, _ := res.RowsAffected(); n != 3 {
+		t.Fatalf("rowsAffected = %d, want 3", n)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestExecDirectSliceExpansionDisabledErrors(t *testing.T) {
+	db, _, _ := sqlmock.New()
+	defer db.Close()
+	d := New(db) // WithSliceExpansion not set
+	_, err := d.Exec(context.Background(), "DELETE FROM t WHERE code IN (:codes)", []string{"a"})
+	if !errors.Is(err, ErrUnsupportedType) {
+		t.Fatalf("err = %v, want ErrUnsupportedType", err)
+	}
+}
+
 func TestBeforeGateErrorStillRunsAfter(t *testing.T) {
 	db, _, _ := sqlmock.New()
 	defer db.Close()
